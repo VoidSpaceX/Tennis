@@ -9,6 +9,9 @@ class CalculationSpeed:
         self.current_speed = 0.0
         
     def add_position(self, x, y):
+        """Добавляет новую позицию объекта и обновляет текущую скорость.
+        Вычисляет время между текущим и предыдущим кадром, расстояние в метрах
+        и скорость (м/с). Если предыдущей позиции нет, просто запоминает текущую."""
         current_time = time.time()
         
         if self.prev_center is not None and self.prev_time is not None:
@@ -24,4 +27,11 @@ class CalculationSpeed:
         self.prev_time = current_time
             
     def get_speed(self):
+        """Возвращает последнюю вычисленную скорость."""
         return self.current_speed
+    
+    def reset(self):
+        """Сбрасывает предыдущую точку и время, чтобы начать новый замер."""
+        self.prev_center = None
+        self.prev_time = None
+        self.current_speed = 0.0

@@ -1,6 +1,5 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
-import cv2
 
 from database import Database
 from point_selector import PointSelectorDialog
@@ -37,20 +36,30 @@ class CalibrationWindow(tk.Toplevel):
         self.load_calibration()
         
         self.combobox.bind("<<ComboboxSelected>>", self.on_calibration_selected)
+        self.protocol("WM_DELETE_WINDOW", self.on_close)
         
     def setup_ui(self):
+        """Создаёт все элементы интерфейса"""
         main_frame = ttk.Frame(self, padding="20")
         main_frame.pack(fill=tk.BOTH, expand=True)
         
-        calib_name = ttk.Labelframe(
+        # Блок со списком сохранённых калибровок
+        frame_calib = ttk.Labelframe(
             main_frame,
             text="Сохранённые калибровки"
         )
-        calib_name.pack(fill=tk.X, pady=(0, 20))
+        frame_calib.pack(fill=tk.X, pady=(0, 20))
         
-        self.combobox = ttk.Combobox(calib_name, width=30, state="readonly")
+        self.combobox = ttk.Combobox(frame_calib, width=30, state="readonly")
         self.combobox.pack(side=tk.LEFT)
         
+        self.btn_delete_id = ttk.Button(frame_calib, text="Удалить калибровку", command=self.delete_selected_calibration)
+        self.btn_delete_id.pack(side=tk.RIGHT, padx=5, ipady=8)
+        
+        self.btn_delete_all = ttk.Button(frame_calib, text="Удалить все калибровки", command=self.clear_all_calibrations)
+        self.btn_delete_all.pack(side=tk.RIGHT, padx=5, ipady=8)
+        
+        # Блок параметров калибровки
         frame_vidget = ttk.Labelframe(
             main_frame,
             text="Параметры калибровки",
@@ -84,6 +93,7 @@ class CalibrationWindow(tk.Toplevel):
         self.btn_select_points = ttk.Button(frame_vidget, text="Выбрать две точки на кадре", command=self.select_points, state=tk.DISABLED)
         self.btn_select_points.grid(row=5, column=0, columnspan=2, pady=15)
         
+        # Блок с кнопками для работы с калибровкой.
         button_frame = ttk.Frame(main_frame)
         button_frame.pack(fill=tk.BOTH, pady=(10, 0))
         
@@ -100,16 +110,18 @@ class CalibrationWindow(tk.Toplevel):
         self.btn_cancel.pack(side=tk.LEFT, padx=5, ipady=8)
             
     def load_calibration(self):
+        """Загружает список калибровок из БД и заполняет выпадающий список."""
         calibrations = self.db.get_all_calibrations()
         if calibrations:
-            calib_list = [f"ID {cal[0]}: {cal[1]}" for cal in calibrations]
+            calib_list = [f"ID {cal[0]}: {cal[1]}, {cal[8]}" for cal in calibrations]
             self.combobox['values'] = calib_list
-            self.calibrations_data = {f"ID {cal[0]}: {cal[1]}": cal for cal in calibrations}
+            self.calibrations_data = {f"ID {cal[0]}: {cal[1]}, {cal[8]}": cal for cal in calibrations}
         else:
             self.combobox['values'] = ["Нет сохранённых калибровок"]
             self.calibrations_data = {}
             
     def on_calibration_selected(self, event):
+        """Обработчик выбора элемента в комбобоксе. Загружает данные выбранной калибровки в поля."""
         selection = self.combobox.get()
         if selection in self.calibrations_data:
             cal = self.calibrations_data[selection]
@@ -123,6 +135,7 @@ class CalibrationWindow(tk.Toplevel):
             self.btn_use.config(state=tk.NORMAL)
             
     def create_new(self):
+        """Переключает интерфейс в режим создания новой калибровки: разблокирует поля и кнопки."""
         self.edit_mode = True
         
         self.name_var.set("")
@@ -149,6 +162,8 @@ class CalibrationWindow(tk.Toplevel):
         self.name_entry.focus()
 
     def select_points(self):
+        """Открывает диалог PointSelectorDialog для выбора двух точек и вычисления масштаба.
+        При успехе сохраняет координаты, расстояния и масштаб в атрибутах класса."""
         if not self.edit_mode:
             messagebox.showwarning("Предупреждение", "Сначала нажмите 'Создать новую'")
             return
@@ -170,6 +185,9 @@ class CalibrationWindow(tk.Toplevel):
             messagebox.showwarning("Предупреждение", "Калибровка не выполнена")   
     
     def save_calibration(self):
+        """Сохраняет текущую калибровку в базу данных.
+        Проверяет заполнение названия, наличие точек и реального расстояния.
+        В случае успеха обновляет список, выходит из режима редактирования и запускает видео."""
         name = self.name_var.get().strip()
         if not name:
             messagebox.showerror("Ошибка", "Введите название калибровки")
@@ -202,6 +220,7 @@ class CalibrationWindow(tk.Toplevel):
             messagebox.showerror("Ошибка", f"Ошибка сохранения: {e}")
             
     def cancel_edit(self):
+        """Отменяет режим редактирования, блокирует поля и восстанавливает список калибровок."""
         self.edit_mode = False
         
         self.name_entry.config(state="readonly")
@@ -226,12 +245,54 @@ class CalibrationWindow(tk.Toplevel):
             self.on_calibration_selected(None)
         
     def use_selected(self):
+        """Использует выбранную калибровку: закрывает окно и запускает VideoApp с сохранённым масштабом."""
         if self.scale:
             self.go_to_video()
         else:
             messagebox.showerror("Ошибка", "Калибровка не выбрана")
 
     def go_to_video(self):
+        """Закрывает окно калибровки, показывает родительское окно и запускает VideoApp."""
         self.destroy()
         self.parent.deiconify() 
         VideoApp(self.parent, self.video_source, self.scale)
+    
+    def delete_selected_calibration(self):
+        if not self.selected_calib_id:
+            messagebox.showwarning("Предупреждение", "Сначала выберите калибровку из списка.")
+            return
+        if not messagebox.askyesno("Подтверждение", "Удалить выбранную калибровку?"):
+            return
+        try:
+            self.db.delete_calibration(self.selected_calib_id)
+            self.load_calibration()
+            self.combobox.set("")
+            messagebox.showinfo("Успех", "Калибровка удалена.")
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Не удалось удалить: {e}")
+    
+    def clear_all_calibrations(self):
+        """Спрашивает подтверждение и удаляет все калибровки из БД."""
+        if not messagebox.askyesno(
+            "Подтверждение",
+            "Вы действительно хотите удалить ВСЕ сохранённые калибровки?\nЭто действие нельзя отменить."
+        ):
+            return
+
+        try:
+            self.db.delete_all_calibrations()
+            self.load_calibration()
+            self.combobox.set("")
+            self.name_var.set("")
+            self.real_size_var.set("")
+            self.coefficient_var.set("")
+            self.point1_var.set("")
+            self.point2_var.set("")
+            messagebox.showinfo("Готово", "Все калибровки удалены.")
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Не удалось очистить базу данных:\n{e}")
+    
+    def on_close(self):
+        """Закрывает окно калибровки и возвращает главное окно."""
+        self.parent.deiconify()
+        self.destroy()

@@ -5,6 +5,13 @@ import numpy as np
 from PIL import Image, ImageTk
 
 class PointSelectorDialog(tk.Toplevel):
+    """
+    Диалоговое окно для калибровки: выбор двух точек на кадре и ввод реального расстояния.
+
+    Позволяет пользователю кликнуть две точки на изображении,
+    затем ввести реальное расстояние между ними в метрах.
+    Рассчитывает масштаб (м/пиксель) и возвращает данные калибровки.
+    """
     def __init__(self, parent, frame):
         super().__init__(parent)
         self.parent = parent
@@ -21,6 +28,7 @@ class PointSelectorDialog(tk.Toplevel):
         self.display_frame()
         
     def setup_ui(self):
+        """Создаёт элементы интерфейса: canvas для рисования, информационные метки и кнопки."""
         self.canvas = tk.Canvas(self, bg='gray', cursor="cross")
         self.canvas.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         self.canvas.bind("<Button-1>", self.on_click)
@@ -44,6 +52,7 @@ class PointSelectorDialog(tk.Toplevel):
         ttk.Button(btn_frame, text="🔄 Сбросить точки", command=self.reset_points).pack(side=tk.LEFT, padx=5, ipady=5)
     
     def display_frame(self):
+        """Отображает кадр на canvas с сохранением пропорций и обновляет область прокрутки."""
         frame_rgb = cv2.cvtColor(self.original_frame, cv2.COLOR_BGR2RGB)
         img = Image.fromarray(frame_rgb)
         
@@ -57,12 +66,13 @@ class PointSelectorDialog(tk.Toplevel):
         self.canvas.config(scrollregion=self.canvas.bbox("all"))
     
     def on_click(self, event):
+        """Обрабатывает клик мыши на canvas: добавляет точку, отрисовывает её и линии."""
         if len(self.points) < 2:
             x, y = event.x, event.y
             self.points.append((x, y))
         
-            self.canvas.create_oval(x-5, y-5, x+5, y+5, fill="red", outline="white", width=2)
-            self.canvas.create_text(x+15, y-15, text=str(len(self.points)), fill="red", font=("Arial", 12, "bold"))
+            self.canvas.create_oval(x-3, y-3, x+3, y+3, fill="red", outline="white", width=2)
+            self.canvas.create_text(x+10, y-10, text=str(len(self.points)), fill="red", font=("Arial", 12, "bold"))
             
             if len(self.points) == 2:
                 p1, p2 = self.points
@@ -76,6 +86,7 @@ class PointSelectorDialog(tk.Toplevel):
                 self.points_label.config(text="Точек выбрано: 1/2")
     
     def reset_points(self):
+        """Сбрасывает выбранные точки, очищает canvas и перерисовывает исходное изображение."""
         self.points = []
         self.pixel_distance = None
         self.btn_ok.config(state=tk.DISABLED)
@@ -84,6 +95,8 @@ class PointSelectorDialog(tk.Toplevel):
         self.display_frame()
     
     def calculate_scale(self):
+        """Запрашивает реальное расстояние, вычисляет масштаб и закрывает диалог.
+        Показывает ошибку, если расстояние не введено или некорректно."""
         if not self.pixel_distance:
             messagebox.showerror("Ошибка", "Сначала выберите две точки")
             return
@@ -103,6 +116,7 @@ class PointSelectorDialog(tk.Toplevel):
             messagebox.showerror("Ошибка", "Некорректное расстояние")
     
     def get_calibration_data(self):
+        """Возвращает словарь с данными калибровки."""
         return {
             'points': self.points,
             'pixel_distance': self.pixel_distance,
