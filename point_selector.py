@@ -114,12 +114,3 @@ class PointSelectorDialog(tk.Toplevel):
             self.destroy()
         else:
             messagebox.showerror("Ошибка", "Некорректное расстояние")
-    
-    def get_calibration_data(self):
-        """Возвращает словарь с данными калибровки."""
-        return {
-            'points': self.points,
-            'pixel_distance': self.pixel_distance,
-            'real_distance': self.real_distance,
-            'scale': self.scale
-        }
