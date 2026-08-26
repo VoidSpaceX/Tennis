@@ -53,10 +53,22 @@ class TennisApp:
     
     def load_video(self):
         """Открывает диалог выбора видеофайла и запускает калибровку."""
-        path = filedialog.askopenfilename(filetypes=[("Video","*.mp4 *.avi *.mov")])
-        if path:
-            self.video_source = path
-            self.open_calibration_window()
+        try:
+            path = filedialog.askopenfilename(filetypes=[("Video","*.mp4 *.avi *.mov")])
+            if path:
+                valid_extensions = ('.mp4', '.avi', '.mov')
+                file_ext = os.path.splitext(path)[1].lower()
+                
+                if file_ext not in valid_extensions:
+                    messagebox.showerror("Ошибка", 
+                        f"Формат файла '{file_ext}' не поддерживается.\n"
+                        f"Поддерживаемые форматы: .mp4, .avi, .mov")
+                    return
+                
+                self.video_source = path
+                self.open_calibration_window()
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Не удалось загрузить видео: {e}")
             
     def start_camera(self):
         """Пытается открыть веб-камеру (индекс 0). При успехе запускает калибровку."""
@@ -66,7 +78,7 @@ class TennisApp:
             cap.release()
             self.open_calibration_window()
         else:
-            messagebox.showerror("Ошибка", f"Не удалось открыть камеру {0}")
+            messagebox.showerror("Ошибка", f"Не удалось открыть камеру")
     
     def open_calibration_window(self):
         """Читает первый кадр из источника и открывает окно калибровки."""
@@ -81,11 +93,11 @@ class TennisApp:
             messagebox.showerror("Ошибка", "Не удалось получить кадр для калибровки")
     
     def label_clicked(self, event):
-        """Открывает файл инструкции (docx)."""
+        """Открывает файл инструкции (pdf)."""
         try:
-            os.startfile("Инструкция.docx")
+            os.startfile("Инструкция.pdf")
         except FileNotFoundError:
-            messagebox.showerror("Ошибка", "Файл 'Инструкция.docx' не найден в папке программы.")
+            messagebox.showerror("Ошибка", "Файл 'Инструкция.pdf' не найден в папке программы.")
         except Exception as e:
             messagebox.showerror("Ошибка", f"Не удалось открыть файл инструкции:\n{e}")
     
