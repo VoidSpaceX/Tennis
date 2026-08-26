@@ -6,7 +6,9 @@ import numpy as np
 import threading
 import cv2
 import time
+import torch
 from collections import deque
+
 
 from calculation_speed import CalculationSpeed
 from speed_display import SpeedDisplayDialog
@@ -24,10 +26,14 @@ class VideoApp(tk.Toplevel):
         self.current_frame_pos = 0
         self.total_frames = 0
         self.slider = None
+        self.cap_lock = threading.Lock()
+        self._updating_slider = False
                 
         self.running = False
         self.paused = False
         self.canvas_image = None
+        
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
         
         self.speed_tracer = CalculationSpeed(scale)
         self.SPEED_MIN_KMH = 30.0
@@ -137,14 +143,15 @@ class VideoApp(tk.Toplevel):
         
         while self.running:
             if not self.paused:
-                ret, frame = self.cap.read()
+                with self.cap_lock:
+                    ret, frame = self.cap.read()
                 if not ret:
                     self.running = False
                     break
-                
+                    
                 self.current_frame_pos += 1
                 self.video_time += frame_time
-                
+                    
                 if self.current_frame_pos % 3 == 0:
                     self.after(0, self.update_slider_and_time, self.current_frame_pos)
                 
@@ -215,7 +222,7 @@ class VideoApp(tk.Toplevel):
                 self.display_frame_counter += 1
                 if self.display_frame_counter % 10 == 0:
                     self.after(0, self.send_speed_to_display)
-                   
+                
                 if ball_center and self.SPEED_MIN_KMH <= speed_kmh <= self.SPEED_MAX_KMH:
                     cx, cy = ball_center
                     cv2.rectangle(frame, (cx-20, cy-20), (cx+20, cy+20), (0, 255, 0), 2)
@@ -241,17 +248,15 @@ class VideoApp(tk.Toplevel):
         if self.model is None:
             return None
         
-        results = self.model(frame, verbose=False, device="cuda")
+        results = self.model(frame, verbose=False, device=self.device)
         ball_center = None
-        for r in results:
-            for box in r.boxes:
+        if results and len(results) > 0:
+            if results[0].boxes is not None and len(results[0].boxes) > 0:
+                box = results[0].boxes[0]
                 x1, y1, x2, y2 = map(int, box.xyxy[0])            
                 cx = (x1 + x2) // 2
                 cy = (y1 + y2) // 2
                 ball_center = (cx, cy)
-                break
-            if ball_center:
-                break
         return ball_center
     
     def update_display(self, frame, speed):
@@ -328,7 +333,9 @@ class VideoApp(tk.Toplevel):
     def update_slider_and_time(self, frame_number):
         """Обновляет положение ползунка и метку времени в интерфейсе."""
         if not getattr(self, 'slider_is_moving', False):
+            self._updating_slider = True
             self.video_slider.set(frame_number)
+            self.after(10, lambda: setattr(self, '_updating_slider', False))
         
         if self.total_frames > 0:
             current_seconds = frame_number / self.fps
@@ -343,14 +350,34 @@ class VideoApp(tk.Toplevel):
         
         target_frame = int(float(value))
         if self.total_frames > 0 and 0 <= target_frame < self.total_frames:
-            self.cap.set(cv2.CAP_PROP_POS_FRAMES, target_frame)
-            self.current_frame_pos = target_frame
+            with self.cap_lock:
+                self.cap.set(cv2.CAP_PROP_POS_FRAMES, target_frame)
+            
+            if not self._updating_slider:
+                self.reset_tracking_state(target_frame)
 
             current_seconds = target_frame / self.fps
             total_seconds = self.total_frames / self.fps
             self.time_label.config(text=f"{self.format_time(current_seconds)} / {self.format_time(total_seconds)}")
         
         self.after(100, lambda: setattr(self, 'slider_is_moving', False))
+     
+    def reset_tracking_state(self, new_frame_pos):
+        """Сбрасывает все переменные трекинга при перемотке видео."""
+        self.current_frame_pos = new_frame_pos
+        self.video_time = new_frame_pos / self.fps if self.fps > 0 else 0.0
+
+        self.prev_ball_center = None
+        self.speed_tracer.reset()
+        
+        self.stroke_detect_buffer.clear()
+        self.stroke_measure_active = {1: False, 2: False}
+        self.stroke_measure_start = {1: 0.0, 2: 0.0}
+        self.stroke_measure_max = {1: 0.0, 2: 0.0}
+        
+        self.last_speed_player1 = 0.0
+        self.last_speed_player2 = 0.0
+        self.last_sent_speed = {1: -1.0, 2: -1.0}
      
     def open_display_settings(self):
         """Диалог выбора количества игроков и типа отображения."""
