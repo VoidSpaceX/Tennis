@@ -19,6 +19,8 @@ class PointSelectorDialog(tk.Toplevel):
         self.title("Выбор точек для калибровки")
         self.geometry("900x700")
         
+        self.img_width = 0
+        self.img_height = 0
         self.points = [] 
         self.pixel_distance = None
         self.real_distance = None
@@ -60,6 +62,8 @@ class PointSelectorDialog(tk.Toplevel):
         canvas_height = self.canvas.winfo_height() if self.canvas.winfo_height() > 100 else 600
         img.thumbnail((canvas_width, canvas_height), Image.Resampling.LANCZOS)
         
+        self.img_width, self.img_height = img.size
+        
         self.tk_image = ImageTk.PhotoImage(img)
         self.canvas.delete("all")
         self.canvas.create_image(0, 0, anchor=tk.NW, image=self.tk_image)
@@ -67,6 +71,10 @@ class PointSelectorDialog(tk.Toplevel):
     
     def on_click(self, event):
         """Обрабатывает клик мыши на canvas: добавляет точку, отрисовывает её и линии."""
+        if not (0 <= event.x < self.img_width and 0 <= event.y < self.img_height):
+            messagebox.showwarning("Вне изображения", "Пожалуйста, кликайте только внутри области изображения.")
+            return
+        
         if len(self.points) < 2:
             x, y = event.x, event.y
             self.points.append((x, y))
