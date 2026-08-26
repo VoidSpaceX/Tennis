@@ -253,6 +253,7 @@ class CalibrationWindow(tk.Toplevel):
 
     def go_to_video(self):
         """Закрывает окно калибровки, показывает родительское окно и запускает VideoApp."""
+        self.db.close()
         self.destroy()
         self.parent.deiconify() 
         VideoApp(self.parent, self.video_source, self.scale)
@@ -294,5 +295,6 @@ class CalibrationWindow(tk.Toplevel):
     
     def on_close(self):
         """Закрывает окно калибровки и возвращает главное окно."""
+        self.db.close()
         self.parent.deiconify()
         self.destroy()
